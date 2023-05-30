@@ -1,12 +1,14 @@
 from pathlib import Path
 from yaml import safe_load
-import sys 
-sys.path.append('../')
+import sys
 
-config_path = Path('../config.yaml')
+sys.path.append("../")
+
+config_path = Path("../config.yaml")
+
 
 def get_env_variable(key_name):
-    with open(config_path, 'r') as f:
+    with open(config_path, "r") as f:
         config = safe_load(f)
     env_value = config.get(key_name)
     if not env_value:
