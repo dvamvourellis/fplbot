@@ -1,6 +1,13 @@
 import requests
 import pandas as pd
 import numpy as np
+from joblib import Parallel, delayed
+from tqdm import tqdm
+import pickle
+from fplbot.utils import get_env_variable
+import os
+
+DATA_DIR = get_env_variable("data_dir")
 
 
 def request_current_data():
@@ -26,7 +33,7 @@ def request_fixture_data():
     return json
 
 
-def process_current_data():
+def process_current_data(update_data: bool = True):
     json = request_current_data()
 
     elements_df = pd.DataFrame(json["elements"])
@@ -70,7 +77,7 @@ def process_current_data():
     )
 
     # divide the price returned by 10 to show in millions
-    elements_df_positions_teams["price"] = (
+    elements_df_positions_teams["now_cost"] = (
         elements_df_positions_teams["now_cost"] / 10.0
     )
 
@@ -86,36 +93,62 @@ def process_current_data():
         + " "
         + elements_df_positions_teams["second_name"]
     )
+    elements_df_positions_teams = elements_df_positions_teams.rename(
+        columns={"bonus": "bonus_points"}
+    )
 
     # drop columns
-    players_drop_cols = [
-        "code",
-        "cost_change_event",
-        "cost_change_event_fall",
-        "cost_change_start",
-        "cost_change_start_fall",
-        "element_type",
-        "photo",
-        "squad_number",
-        "special",
-        "team",
-        "team_code",
-        "transfers_in_event",
-        "transfers_out_event",
-        "web_name",
-        "now_cost",
-        "now_cost_rank",
-        "now_cost_rank_type",
-        "form_rank",
-        "form_rank_type",
-        "points_per_game_rank",
-        "points_per_game_rank_type",
-        "first_name",
+    player_keep_cols = [
+        "id",
+        "position",
+        "team_name",
         "second_name",
+        "full_name",
+        "now_cost",
+        "form",
+        "news",
+        "points_per_game",
+        "selected_by_percent",
+        "value_for_money",
+        "total_points",
+        "minutes",
+        "goals_scored",
+        "assists",
+        "clean_sheets",
+        "goals_conceded",
+        "own_goals",
+        "penalties_saved",
+        "penalties_missed",
+        "yellow_cards",
+        "red_cards",
+        "saves",
+        "bonus_points",
+        "influence",
+        "creativity",
+        "threat",
+        "ict_index",
+        "expected_goals",
+        "expected_assists",
+        "expected_goal_involvements",
     ]
-    elements_df_positions_teams = elements_df_positions_teams.drop(
-        columns=players_drop_cols
-    )
+
+    elements_df_positions_teams = elements_df_positions_teams[player_keep_cols]
+    # convert non numeric columns
+    for col in [
+        "form",
+        "selected_by_percent",
+        "points_per_game",
+        "influence",
+        "creativity",
+        "threat",
+        "ict_index",
+        "expected_goals",
+        "expected_assists",
+        "expected_goal_involvements",
+    ]:
+        elements_df_positions_teams[col] = pd.to_numeric(
+            elements_df_positions_teams[col], errors="coerce"
+        )
 
     # player_ids
     id2player = pd.Series(
@@ -143,12 +176,21 @@ def process_current_data():
         ]
     ]
 
+    fixtures_df = get_fixture_data(id2team)
+
     data_dict = {}
     data_dict["players"] = elements_df_positions_teams
     data_dict["teams"] = teams_df_sub
     data_dict["id2player"] = id2player
     data_dict["gameweek_stats"] = events_sub
     data_dict["id2team"] = id2team
+    data_dict["fixtures"] = fixtures_df
+
+    if update_data == True:
+        if not os.path.exists(DATA_DIR):
+            os.makedirs(DATA_DIR)
+        with open(DATA_DIR + "players_dict.pickle", "wb") as f:
+            pickle.dump(data_dict, f)
 
     return data_dict
 
@@ -186,3 +228,125 @@ def get_fixture_data(id2team):
     )
 
     return fixtures_sub
+
+
+def create_player_history(player_id, id2player):
+    json = request_player_data(player_id)
+    player_fixtures = pd.DataFrame(json["fixtures"])
+    player_gw_history = pd.DataFrame(json["history"])
+    player_history_past = pd.DataFrame(json["history_past"])
+
+    player_data_dict = {}
+    player_data_dict["player_fixtures"] = player_fixtures
+    player_data_dict["player_gw_history"] = player_gw_history
+    player_data_dict["player_history_past"] = player_history_past
+
+    for df_key, df in player_data_dict.items():
+        df["full_name"] = id2player[player_id]
+        df["player_name"] = df["full_name"].str.split(" ").apply(lambda x: x[-1])
+
+    return player_data_dict
+
+
+def create_player_history_agg(id2player, id2team, update_data: bool = True):
+    # create the data for all players
+    player_data_dicts = Parallel(n_jobs=-1)(
+        delayed(create_player_history)(player_id, id2player=id2player)
+        for player_id in tqdm(id2player.keys())
+    )
+
+    player_history_past_agg = [
+        player_data_dict["player_history_past"]
+        for player_data_dict in player_data_dicts
+    ]
+    player_gw_history_agg = [
+        player_data_dict["player_gw_history"] for player_data_dict in player_data_dicts
+    ]
+    player_history_past_agg = pd.concat(player_history_past_agg, axis=0)
+    player_gw_history_agg = pd.concat(player_gw_history_agg, axis=0)
+
+    # update price columns
+    player_history_past_agg["start_cost"] = player_history_past_agg["start_cost"] / 10.0
+    player_history_past_agg["end_cost"] = player_history_past_agg["end_cost"] / 10.0
+
+    # update team name
+    player_gw_history_agg["cost"] = player_gw_history_agg["value"] / 10.0
+    player_gw_history_agg["opponent_team"] = player_gw_history_agg[
+        "opponent_team"
+    ].apply(lambda x: id2team[x])
+
+    player_gw_history_agg_cols = [
+        "full_name",
+        "cost",
+        "opponent_team",
+        "total_points",
+        "was_home",
+        "minutes",
+        "goals_scored",
+        "assists",
+        "clean_sheets",
+        "goals_conceded",
+        "own_goals",
+        "penalties_saved",
+        "penalties_missed",
+        "yellow_cards",
+        "red_cards",
+        "saves",
+        "bonus",
+        "expected_goals",
+        "expected_assists",
+        "expected_goal_involvements",
+        "expected_goals_conceded",
+    ]
+    player_gw_history_agg = player_gw_history_agg[player_gw_history_agg_cols]
+
+    player_history_past_agg_cols = [
+        "full_name",
+        "season_name",
+        "start_cost",
+        "end_cost",
+        "total_points",
+        "minutes",
+        "goals_scored",
+        "assists",
+        "clean_sheets",
+        "goals_conceded",
+        "own_goals",
+        "penalties_saved",
+        "penalties_missed",
+        "yellow_cards",
+        "red_cards",
+        "saves",
+        "bonus",
+        "starts",
+        "expected_goals",
+        "expected_assists",
+        "expected_goal_involvements",
+        "expected_goals_conceded",
+    ]
+    player_history_past_agg = player_history_past_agg[player_history_past_agg_cols]
+
+    for col in [
+        "expected_goals",
+        "expected_assists",
+        "expected_goal_involvements",
+        "expected_goals_conceded",
+    ]:
+        player_gw_history_agg[col] = pd.to_numeric(
+            player_gw_history_agg[col], errors="coerce"
+        )
+        player_history_past_agg[col] = pd.to_numeric(
+            player_history_past_agg[col], errors="coerce"
+        )
+
+    player_data_agg_dict_final = {}
+    player_data_agg_dict_final["players_season_history"] = player_history_past_agg
+    player_data_agg_dict_final["players_gw_history"] = player_gw_history_agg
+
+    if update_data == True:
+        if not os.path.exists(DATA_DIR):
+            os.makedirs(DATA_DIR)
+        with open(DATA_DIR + "players_history_dict.pickle", "wb") as f:
+            pickle.dump(player_data_agg_dict_final, f)
+
+    return player_data_agg_dict_final

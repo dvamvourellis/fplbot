@@ -8,6 +8,19 @@ from fplbot.bot_agent.bot import fplAgent
 
 st.title("Fantasy Premier League AssIstant Coach")
 
+update_data_option = st.selectbox(
+    'Update FPL Data',
+    ('True', 'False'),
+    index=1
+    )
+
+update_data_option = st.selectbox(
+    'OpenAI Model',
+    ('gpt-3.5-turbo', 'text-davinci-003'),
+    index=0
+    )
+
+
 openai_api_key = st.text_input(
     "Enter your OpenAI API Key",
     key="user_key_input",
@@ -16,7 +29,14 @@ openai_api_key = st.text_input(
 )
 
 # initialize agent
-agent = fplAgent(openai_api_key=openai_api_key)
+if openai_api_key != '':
+    if update_data_option == 'True':
+        update_data = True
+    else:
+        update_data = False
+    agent = fplAgent(openai_api_key=openai_api_key, update_data=update_data)
+else:
+    st.write("Please provide a valid OpenAI API key.")
 
 # Storing the chat
 if "generated" not in st.session_state:

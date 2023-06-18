@@ -11,7 +11,7 @@ from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
 sys.path.append("../")
 from fplbot.utils import get_env_variable
 
-# os.environ['OPENAI_API_KEY'] = get_env_variable('openai_api_key')
+os.environ["OPENAI_API_KEY"] = get_env_variable("openai_api_key")
 
 
 def init_davinci(openai_api_key: Optional[str] = None, temperature=0):

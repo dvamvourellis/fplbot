@@ -5,6 +5,7 @@ import sys
 sys.path.append("../")
 
 config_path = Path("../config.yaml")
+print(config_path)
 
 
 def get_env_variable(key_name):
@@ -12,5 +13,5 @@ def get_env_variable(key_name):
         config = safe_load(f)
     env_value = config.get(key_name)
     if not env_value:
-        raise ValueError("API key not found in the configuration file")
+        raise ValueError("key not found in the configuration file")
     return env_value
