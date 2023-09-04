@@ -1,2 +1,2 @@
-openai_api_key: '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'
-data_dir: '/Users/dimitrisvamvourellis/Documents/nlp_projects/fplbot/fplbot/knowledge_base/fpldata/'
+openai_api_key: 'your_key',
+data_dir:  <absolute_path_to_fplbot/knowledge_base/fpldata/>

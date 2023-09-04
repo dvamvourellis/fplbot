@@ -8,18 +8,9 @@ from fplbot.bot_agent.bot import fplAgent
 
 st.title("Fantasy Premier League AssIstant Coach")
 
-update_data_option = st.selectbox(
-    'Update FPL Data',
-    ('True', 'False'),
-    index=1
-    )
-
-update_data_option = st.selectbox(
-    'OpenAI Model',
-    ('gpt-3.5-turbo', 'text-davinci-003'),
-    index=0
-    )
-
+update_data_option = st.selectbox("Update FPL Data", ("True", "False"), index=1)
+history_option = st.selectbox("Use Historical FPL Data", ("True", "False"), index=1)
+model = st.selectbox("Model", ("gpt-3.5-turbo", "text-davinci-003"), index=1)
 
 openai_api_key = st.text_input(
     "Enter your OpenAI API Key",
@@ -29,12 +20,23 @@ openai_api_key = st.text_input(
 )
 
 # initialize agent
-if openai_api_key != '':
-    if update_data_option == 'True':
+if openai_api_key != "":
+    if update_data_option == "True":
         update_data = True
     else:
         update_data = False
-    agent = fplAgent(openai_api_key=openai_api_key, update_data=update_data)
+
+    if history_option == "True":
+        load_history = True
+    else:
+        load_history = False
+
+    agent = fplAgent(
+        openai_api_key=openai_api_key,
+        model_name=model,
+        update_data=update_data,
+        load_history=load_history,
+    )
 else:
     st.write("Please provide a valid OpenAI API key.")
 

@@ -3,7 +3,7 @@ from langchain.agents.mrkl.base import ZeroShotAgent
 from langchain.prompts.base import BasePromptTemplate
 from langchain.tools.python.tool import PythonAstREPLTool
 from fplbot.bot_agent.templates import MULTI_DF_PREFIX, SUFFIX_MULTI_DF
-from langchain.memory import ConversationBufferMemory,ConversationBufferWindowMemory
+from langchain.memory import ConversationBufferMemory, ConversationBufferWindowMemory
 from langchain.llms.base import BaseLLM
 from langchain.chains.llm import LLMChain
 from langchain.callbacks.base import BaseCallbackManager
@@ -51,7 +51,7 @@ def create_pandas_multidf_with_memory(
     callback_manager: Optional[BaseCallbackManager] = None,
     verbose: bool = True,
     return_intermediate_steps: bool = False,
-    max_iterations: Optional[int] = 10,
+    max_iterations: Optional[int] = 5,
     max_execution_time: Optional[float] = None,
     early_stopping_method: str = "force",
     **kwargs: Any,
@@ -85,5 +85,5 @@ def create_pandas_multidf_with_memory(
         max_execution_time=max_execution_time,
         early_stopping_method=early_stopping_method,
         callback_manager=callback_manager,
-        memory=memory
+        memory=memory,
     )
